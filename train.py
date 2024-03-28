@@ -6,13 +6,15 @@ from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
 import numpy as np
 import json
+import set_split
+import random
 
-class model(nn.Module):
-    def __init__(self, input_dim=22, output_dim=1, num_hidden_layers=20, hidden_dim=100):
+class NNModel(nn.Module):
+    def __init__(self, input_dim=27, output_dim=1, num_hidden_layers=30 , hidden_dim=60, p_dropout=0.3):
         super().__init__()
-        
+
         self.hidden_layers = nn.ModuleList()
-        self.dropout = nn.Dropout(p=0.2)
+        self.dropout = nn.Dropout(p= p_dropout)
 
         for i in range(num_hidden_layers):
             self.hidden_layers.append(nn.Linear(input_dim if i == 0 else hidden_dim, hidden_dim))
@@ -32,15 +34,16 @@ class data_set(Dataset):
         data = F.normalize(data)
         self.data = data
         self.label = label
-    
+
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, index):
         return torch.tensor(self.data[index]).float(), torch.tensor(self.label[index]).float()
 
-def fetch_data():
-    PATH = ""
+def fetch_data(PATH):
+    set_split.split_raw_data(5)
+
     with open(PATH, "r", encoding = "utf-8") as r:
         jdata = json.load(r)
 
@@ -48,34 +51,35 @@ def fetch_data():
     LABEL = []
     for value in jdata["data"]:
         DATA.append(value[0])
-        LABEL.append(value[1])   
+        LABEL.append(value[1])
     return DATA, LABEL
 
 device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
-batch_size = 24
-n_epoch = 150
 
-DATA, LABEL = fetch_data()
+batch_size = 24
+n_epoch = 100
+
+DATA, LABEL = fetch_data("./train_data.json")
 datasplit = int(len(DATA)/5)
 DATA1, LABEL1 = DATA[datasplit:], LABEL[datasplit:]
 DATA2, LABEL2 = DATA[:datasplit], LABEL[:datasplit]
 
 train_dataset = data_set(DATA1, LABEL1)
-test_dataset = data_set(DATA2, LABEL2)
+val_dataset = data_set(DATA2, LABEL2)
 
 train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
 
-model = model()
+model = NNModel()
 model.to(device)
 learning_rate = 0.001
 criterion = nn.MSELoss()
 optimizer = Adam(model.parameters(), lr=learning_rate)
 
 def fit(epoch, model, dataloader, training = True):
-    if training: 
-        model.train() 
-    else: 
+    if training:
+        model.train()
+    else:
         model.eval()
 
     mode = "training" if training else "validation"
@@ -106,7 +110,7 @@ train_losses, val_losses = [], []
 for epoch in range(1, n_epoch+1):
     epoch_train_loss = fit(epoch, model, train_dataloader, True)
     train_losses.append(epoch_train_loss)
-    epoch_val_loss = fit(epoch, model, test_dataloader, False)
+    epoch_val_loss = fit(epoch, model, val_dataloader, False)
     val_losses.append(epoch_val_loss)
 
 torch.save(model.state_dict(), './model.ckpt')
@@ -116,3 +120,24 @@ print("Model saved")
 plt.plot(range(1, len(train_losses)+1), train_losses, 'bo', label = 'training loss')
 plt.plot(range(1, len(val_losses)+1), val_losses, 'r', label = 'validation loss')
 plt.legend()
+
+#test
+model_for_test = NNModel(p_dropout=0.3)
+model_for_test.load_state_dict(torch.load('./model.ckpt'))
+
+TESTDATA, TESTLABEL = fetch_data("./test_data.json")
+
+avg_error = 0
+
+for i in range(len(TESTDATA)):
+    with torch.no_grad():
+        pred_y = model_for_test(torch.tensor(DATA[i]))
+
+        error = abs(pred_y[0]-LABEL[i][0])/LABEL[i][0]
+
+        print(f"{i}  y:{LABEL[i]}  pred_y:{pred_y[0]}  error:{error} ({round(error.item()*100, 2)}%)")
+        avg_error += error.item()
+
+print(f"average error: {round(avg_error*100/5, 2)}%")
+
+plt.show()
