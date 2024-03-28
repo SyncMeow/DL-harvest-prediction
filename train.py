@@ -121,7 +121,7 @@ plt.plot(range(1, len(val_losses)+1), val_losses, 'r', label = 'validation loss'
 plt.legend()
 
 #test
-model_for_test = NNModel(p_dropout=0.3)
+model_for_test = NNModel(p_dropout=0)
 model_for_test.load_state_dict(torch.load('./model.ckpt'))
 
 TESTDATA, TESTLABEL = fetch_data("./test_data.json")
