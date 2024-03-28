@@ -99,7 +99,6 @@ def fit(epoch, model, dataloader, training = True):
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
-    #loss = running_loss / len(dataloader.dataset)
     loss = running_loss / cnt
     print(f'<Epoch {epoch}> {mode} loss: {round(loss, 4)}')
     return loss
