@@ -6,7 +6,7 @@ from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
 import numpy as np
 import json
-import set_split
+import split
 import random
 
 class NNModel(nn.Module):
